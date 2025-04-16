@@ -1,6 +1,6 @@
 /**
  * File: client/src/components/Chat/Chat.jsx
- * Description: Main chat component that manages the chat interface and message display
+ * Description: Main chat component that handles message interactions
  */
 
 import React, { useState, useRef, useEffect } from 'react';
@@ -11,6 +11,8 @@ import Message from './Message';
 import ChatInput from './ChatInput';
 import './Chat.css';
 import { useNavigate } from 'react-router-dom';
+import eventBus from '../../utils/eventBus';
+import { EVENT_TYPES } from '../../utils/eventTypes';
 
 // A simple function to generate a unique ID.
 const generateUniqueId = () => {
@@ -113,6 +115,18 @@ const Chat = ({ analyticsData, updateAnalytics }) => {
         conversation_history: formattedHistory
       };
 
+      // Emit message sent event
+      eventBus.emit(EVENT_TYPES.CHAT_MESSAGE_SENT, { 
+        message,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Log message sent
+      console.log('Message sent:', { 
+        message,
+        timestamp: new Date().toISOString()
+      });
+
       const response = await apiClient.post('/chat', payload);
       const { chat_response, conversation_history: updatedHistory, tool_call_detected, analytics: updatedAnalytics } = response.data;
       
@@ -153,6 +167,22 @@ const Chat = ({ analyticsData, updateAnalytics }) => {
         };
         setMessages(prev => [...prev, finalMessage]);
         
+        // Emit response returned event for tool call
+        eventBus.emit(EVENT_TYPES.CHAT_RESPONSE_RETURNED, { 
+          message: final_response,
+          timestamp: new Date().toISOString(),
+          isToolCall: true,
+          analytics: toolCallAnalytics
+        });
+        
+        // Log response returned for tool call
+        console.log('Response returned (Tool Call):', { 
+          message: final_response,
+          timestamp: new Date().toISOString(),
+          isToolCall: true,
+          analytics: toolCallAnalytics
+        });
+        
         setToolCallInProgress(false);
       } else {
         const botMessage = { 
@@ -162,7 +192,42 @@ const Chat = ({ analyticsData, updateAnalytics }) => {
           timestamp: new Date()
         };
         setMessages(prev => [...prev, botMessage]);
+        
+        // Emit response returned event for regular response
+        eventBus.emit(EVENT_TYPES.CHAT_RESPONSE_RETURNED, { 
+          message: chat_response,
+          timestamp: new Date().toISOString(),
+          isToolCall: false,
+          analytics: updatedAnalytics
+        });
+        
+        // Log response returned for regular response
+        console.log('Response returned (Regular):', { 
+          message: chat_response,
+          timestamp: new Date().toISOString(),
+          isToolCall: false,
+          analytics: updatedAnalytics
+        });
       }
+
+      // Emit message received event
+      eventBus.emit(EVENT_TYPES.CHAT_MESSAGE_RECEIVED, { 
+        message: chat_response,
+        analytics: updatedAnalytics 
+      });
+      
+      // Log message received
+      console.log('Message received:', { 
+        message: chat_response,
+        analytics: updatedAnalytics 
+      });
+
+      // Update analytics data through event bus
+      if (updatedAnalytics) {
+        console.log('Emitting analytics update with:', updatedAnalytics);
+        eventBus.emit(EVENT_TYPES.ANALYTICS_UPDATE, updatedAnalytics);
+      }
+
     } catch (error) {
       console.error("Error sending message:", error);
       const errorMessage = { 
@@ -172,6 +237,7 @@ const Chat = ({ analyticsData, updateAnalytics }) => {
         timestamp: new Date()
       };
       setMessages(prev => [...prev, errorMessage]);
+      eventBus.emit(EVENT_TYPES.CHAT_ERROR, { error: error });
     } finally {
       setLoading(false);
     }

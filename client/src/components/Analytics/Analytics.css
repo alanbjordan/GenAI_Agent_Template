@@ -395,3 +395,13 @@ body {
   background-color: var(--background-color);
   transform: translateY(-1px);
 }
+
+.last-fetch-time {
+  font-size: 12px;
+  color: #666;
+  text-align: right;
+  margin-top: 5px;
+  margin-bottom: 10px;
+  font-style: italic;
+  padding: 0 24px;
+}

@@ -8,7 +8,7 @@
 import React, { useState, useEffect } from 'react';
 import AnalyticsSummary from './AnalyticsSummary';
 import AnalyticsTable from './AnalyticsTable';
-import apiClient from '../../utils/apiClient';
+import analyticsService from '../../utils/analyticsService';
 import eventBus from '../../utils/eventBus';
 import { EVENT_TYPES } from '../../utils/eventTypes';
 import './Analytics.css';
@@ -32,8 +32,7 @@ const Analytics = () => {
   const fetchAnalyticsData = async () => {
     try {
       console.log('ANALYTICS: Fetching analytics data...');
-      const response = await apiClient.get('/analytics/summary');
-      const newData = response.data;
+      const newData = await analyticsService.fetchAnalyticsSummary();
       setAnalyticsData(newData);
       setError(null);
       setLastFetchTime(new Date().toISOString());
@@ -68,12 +67,12 @@ const Analytics = () => {
       console.log('ANALYTICS: Emitted reset event');
       
       // Then make the API call in the background
-      const response = await apiClient.post('/analytics/reset');
+      const response = await analyticsService.resetAnalytics();
       
       // Update with the actual reset data from the server
-      if (response.data && response.data.analytics) {
-        setAnalyticsData(response.data.analytics);
-        console.log('ANALYTICS: Reset successful, new data:', response.data.analytics);
+      if (response && response.analytics) {
+        setAnalyticsData(response.analytics);
+        console.log('ANALYTICS: Reset successful, new data:', response.analytics);
       }
     } catch (err) {
       console.error('ANALYTICS: Error resetting analytics data:', err);
@@ -85,10 +84,10 @@ const Analytics = () => {
   useEffect(() => {
     console.log('ANALYTICS: Setting up event listeners...');
     
-    // Listen for analytics updates
-    const unsubscribeUpdate = eventBus.on(EVENT_TYPES.ANALYTICS_UPDATE, (data) => {
-      console.log('ANALYTICS: Received update event with data:', data);
-      setAnalyticsData(data);
+    // Listen for analytics fetch notification from API client
+    const unsubscribeFetch = eventBus.on(EVENT_TYPES.ANALYTICS_FETCH, () => {
+      console.log('ANALYTICS: Received fetch notification from API client');
+      fetchAnalyticsData();
     });
 
     // Listen for analytics reset events
@@ -97,25 +96,14 @@ const Analytics = () => {
       fetchAnalyticsData();
     });
 
-    // Listen for chat response events to automatically fetch updated data
-    const unsubscribeChatResponse = eventBus.on(EVENT_TYPES.CHAT_RESPONSE_RETURNED, (data) => {
-      console.log('ANALYTICS: Received chat response event:', data);
-      // Add a small delay to ensure the server has processed the analytics
-      setTimeout(() => {
-        console.log('ANALYTICS: Auto-fetching data after chat response');
-        fetchAnalyticsData();
-      }, 500);
-    });
-
     // Initial fetch
     fetchAnalyticsData();
 
     // Cleanup event listeners
     return () => {
       console.log('ANALYTICS: Cleaning up event listeners');
-      unsubscribeUpdate();
+      unsubscribeFetch();
       unsubscribeReset();
-      unsubscribeChatResponse();
     };
   }, []);
 

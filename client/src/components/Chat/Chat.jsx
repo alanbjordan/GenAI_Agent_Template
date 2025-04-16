@@ -5,7 +5,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import apiClient from '../../utils/apiClient';
+import chatService from '../../utils/chatService';
 import InventoryDisplay from './InventoryDisplay';
 import Message from './Message';
 import ChatInput from './ChatInput';
@@ -110,25 +110,9 @@ const Chat = ({ analyticsData, updateAnalytics }) => {
         content: message
       });
 
-      const payload = {
-        message: message,
-        conversation_history: formattedHistory
-      };
-
-      // Emit message sent event
-      eventBus.emit(EVENT_TYPES.CHAT_MESSAGE_SENT, { 
-        message,
-        timestamp: new Date().toISOString()
-      });
-      
-      // Log message sent
-      console.log('Message sent:', { 
-        message,
-        timestamp: new Date().toISOString()
-      });
-
-      const response = await apiClient.post('/chat', payload);
-      const { chat_response, conversation_history: updatedHistory, tool_call_detected, analytics: updatedAnalytics } = response.data;
+      // Use chatService to send the message
+      const response = await chatService.sendMessage(message, formattedHistory);
+      const { chat_response, conversation_history: updatedHistory, tool_call_detected, analytics: updatedAnalytics } = response;
       
       setConversationHistory(updatedHistory);
 
@@ -147,11 +131,9 @@ const Chat = ({ analyticsData, updateAnalytics }) => {
         };
         setMessages(prev => [...prev, searchingMessage]);
         
-        const toolCallResponse = await apiClient.post('/tool-call-result', {
-          conversation_history: updatedHistory
-        });
-        
-        const { final_response, final_conversation_history, analytics: toolCallAnalytics } = toolCallResponse.data;
+        // Use chatService to handle tool call result
+        const toolCallResponse = await chatService.handleToolCallResult(updatedHistory);
+        const { final_response, final_conversation_history, analytics: toolCallAnalytics } = toolCallResponse;
         
         setConversationHistory(final_conversation_history);
         
@@ -167,22 +149,6 @@ const Chat = ({ analyticsData, updateAnalytics }) => {
         };
         setMessages(prev => [...prev, finalMessage]);
         
-        // Emit response returned event for tool call
-        eventBus.emit(EVENT_TYPES.CHAT_RESPONSE_RETURNED, { 
-          message: final_response,
-          timestamp: new Date().toISOString(),
-          isToolCall: true,
-          analytics: toolCallAnalytics
-        });
-        
-        // Log response returned for tool call
-        console.log('Response returned (Tool Call):', { 
-          message: final_response,
-          timestamp: new Date().toISOString(),
-          isToolCall: true,
-          analytics: toolCallAnalytics
-        });
-        
         setToolCallInProgress(false);
       } else {
         const botMessage = { 
@@ -192,40 +158,6 @@ const Chat = ({ analyticsData, updateAnalytics }) => {
           timestamp: new Date()
         };
         setMessages(prev => [...prev, botMessage]);
-        
-        // Emit response returned event for regular response
-        eventBus.emit(EVENT_TYPES.CHAT_RESPONSE_RETURNED, { 
-          message: chat_response,
-          timestamp: new Date().toISOString(),
-          isToolCall: false,
-          analytics: updatedAnalytics
-        });
-        
-        // Log response returned for regular response
-        console.log('Response returned (Regular):', { 
-          message: chat_response,
-          timestamp: new Date().toISOString(),
-          isToolCall: false,
-          analytics: updatedAnalytics
-        });
-      }
-
-      // Emit message received event
-      eventBus.emit(EVENT_TYPES.CHAT_MESSAGE_RECEIVED, { 
-        message: chat_response,
-        analytics: updatedAnalytics 
-      });
-      
-      // Log message received
-      console.log('Message received:', { 
-        message: chat_response,
-        analytics: updatedAnalytics 
-      });
-
-      // Update analytics data through event bus
-      if (updatedAnalytics) {
-        console.log('Emitting analytics update with:', updatedAnalytics);
-        eventBus.emit(EVENT_TYPES.ANALYTICS_UPDATE, updatedAnalytics);
       }
 
     } catch (error) {
@@ -237,7 +169,6 @@ const Chat = ({ analyticsData, updateAnalytics }) => {
         timestamp: new Date()
       };
       setMessages(prev => [...prev, errorMessage]);
-      eventBus.emit(EVENT_TYPES.CHAT_ERROR, { error: error });
     } finally {
       setLoading(false);
     }

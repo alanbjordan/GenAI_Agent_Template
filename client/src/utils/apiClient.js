@@ -1,6 +1,8 @@
 // client/src/utils/apiClient.js
 
 import axios from 'axios';
+import eventBus from './eventBus';
+import { EVENT_TYPES } from './eventTypes';
 
 // API URLs configuration
 const DEFAULT_API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
@@ -42,6 +44,11 @@ apiClient.interceptors.request.use(
 // Add a response interceptor to handle common errors and retry logic
 apiClient.interceptors.response.use(
   (response) => {
+    // Check if the response contains analytics data
+    if (response.data && response.data.analytics) {
+      console.log('API CLIENT: Response contains analytics data, emitting event');
+      eventBus.emit(EVENT_TYPES.ANALYTICS_FETCH);
+    }
     return response;
   },
   async (error) => {
